@@ -25,6 +25,9 @@ class Household:
         )
         self.timescale = timescale
         self.ev_is_home = True
+        self.total_money_spent_charging = 0
+        self.total_money_earned_discharging = 0
+        self.total_invalid_action_punishment = 0
 
     def _normalize_ev_profile(
         self, weekly_profile: list[dict], step_minutes: int
@@ -79,6 +82,11 @@ class Household:
                 actions, charge_price, discharge_price, sim_timestamp
             )
         )
+        self.total_money_spent_charging += money_spent_charging
+        self.total_money_earned_discharging += money_earned_discharging
+        self.total_invalid_action_punishment += invalid_action_punishment
+        
+        return invalid_action_punishment
 
     def update_household(self, sim_timestamp: datetime):
         """

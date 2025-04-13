@@ -10,10 +10,10 @@ from ev2gym.models.ev import EV
 
 
 def get_statistics(env) -> Dict:
-    total_ev_served = np.array(
-        [cs.total_evs_served for cs in env.charging_stations]).sum()
-    total_profits = np.array(
-        [cs.total_profits for cs in env.charging_stations]).sum()
+    # total_ev_served = np.array(
+    #     [cs.total_evs_served for cs in env.charging_stations]).sum()
+    # total_profits = np.array(
+    #     [cs.total_profits for cs in env.charging_stations]).sum()
     total_energy_charged = np.array(
         [cs.total_energy_charged for cs in env.charging_stations]).sum()
     total_energy_discharged = np.array(
@@ -62,11 +62,12 @@ def get_statistics(env) -> Dict:
         energy_user_satisfaction[i] = (e_actual / e_max) * 100
         total_steps_min_emergency_battery_capacity_violation += ev.min_emergency_battery_capacity_metric
 
-    stats = {'total_ev_served': total_ev_served,
-             'total_profits': total_profits,
+    stats = {
+            # 'total_ev_served': total_ev_served,
+            #  'total_profits': total_profits,
              'total_energy_charged': total_energy_charged,
              'total_energy_discharged': total_energy_discharged,
-             'average_user_satisfaction': average_user_satisfaction,
+            #  'average_user_satisfaction': average_user_satisfaction,
              'power_tracker_violation': power_tracker_violation,
              'tracking_error': tracking_error,
              'energy_tracking_error': energy_tracking_error,

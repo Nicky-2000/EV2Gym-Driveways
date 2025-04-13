@@ -440,7 +440,7 @@ class EV2Gym(gym.Env):
             n_ports = household.charging_station.n_ports
             assert n_ports == 1, "Only one port is supported for now"
             
-            invalid_action_punishment, ev = household.step(
+            invalid_action_punishment = household.step(
                 actions[port_counter:port_counter + n_ports],
                 self.charge_prices[cs.id, self.current_step],
                 self.discharge_prices[cs.id, self.current_step],
