@@ -77,7 +77,6 @@ class EV_Charger:
         # EV Charger status
         self.current_power_output = 0
         self.evs_connected = [None] * n_ports
-        self.n_evs_connected = 0
         self.current_step = 0
         self.current_charge_price = 0
         self.current_discharge_price = 0
@@ -87,10 +86,8 @@ class EV_Charger:
         # EV Charger Statistics
         self.total_energy_charged = 0
         self.total_energy_discharged = 0
-        self.total_profits = 0
-        self.total_evs_served = 0
-        self.total_user_satisfaction = 0
-        self.all_user_satisfaction = []
+        self.total_spent_charging = 0
+        self.total_earned_discharging = 0
         self.verbose = verbose
         
     def reset(self):
@@ -100,16 +97,13 @@ class EV_Charger:
         self.current_power_output = 0
         self.current_total_amps = 0
         self.evs_connected = [None] * self.n_ports
-        self.n_evs_connected = 0
         self.current_step = 0
 
         # EV Charger Statistics
         self.total_energy_charged = 0
         self.total_energy_discharged = 0
-        self.total_profits = 0
-        self.total_evs_served = 0
-        self.total_user_satisfaction = 0
-        self.all_user_satisfaction = []
+        self.total_spent_charging = 0
+        self.total_earned_discharging = 0
 
     def step(self, actions, charge_price, discharge_price):
         '''
@@ -123,9 +117,8 @@ class EV_Charger:
             - profit: the total profit + costs of charging and discharging in the current timestep
             - user_satisfaction: a list of user satisfaction values for each EV connected to the EV charger in the current timestep
         '''
-        profit = 0
-        money_spent = 0 # Keeps track of how much money was spent on charging
-        money_earned = 0 # Keeps track of how much money was earned from discharging
+        money_spent_charging = 0 # Keeps track of how much money was spent on charging
+        money_earned_discharging = 0 # Keeps track of how much money was earned from discharging
         user_satisfaction = []
         self.current_power_output = 0
         self.current_total_amps = 0
@@ -177,9 +170,9 @@ class EV_Charger:
                     phases=self.phases,
                     type=self.charger_type)
 
-                profit += abs(actual_energy) * charge_price
-                money_spent += abs(actual_energy) * charge_price 
                 self.total_energy_charged += abs(actual_energy)
+                money_spent_charging += abs(actual_energy) * charge_price
+                self.total_spent_charging += money_spent_charging
                 self.current_power_output += actual_energy * 60/self.timescale
                 self.current_total_amps += actual_amps
 
@@ -194,9 +187,9 @@ class EV_Charger:
                     phases=self.phases,
                     type=self.charger_type)
 
-                profit += abs(actual_energy) * discharge_price
-                money_earned += abs(actual_energy) * discharge_price
                 self.total_energy_discharged += abs(actual_energy)
+                money_earned_discharging += abs(actual_energy) * discharge_price
+                self.total_earned_discharging += money_earned_discharging
                 self.current_power_output += actual_energy * 60/self.timescale
                 self.current_total_amps += actual_amps
 
@@ -207,33 +200,29 @@ class EV_Charger:
                 raise Exception(
                     f'sum of amps {self.current_total_amps} is higher than max charge current {self.max_charge_current}')
 
-        self.total_profits += profit
-
-        departing_evs = []
-        # Check if EVs are departing
-        for i, ev in enumerate(self.evs_connected):
-            if ev is not None:
-                if ev.is_departing(self.current_step) is not None:
-                    # calculate battery degradation
-                    # _,_ = ev.get_battery_degradation()
-                    self.evs_connected[i] = None
-                    self.n_evs_connected -= 1
-                    self.total_evs_served += 1
-                    ev_user_satisfaction = ev.get_user_satisfaction()
-                    self.total_user_satisfaction += ev_user_satisfaction
-                    user_satisfaction.append(ev_user_satisfaction)
-                    self.all_user_satisfaction.append(ev_user_satisfaction)
+        # departing_evs = []
+        # # Check if EVs are departing
+        # for i, ev in enumerate(self.evs_connected):
+        #     if ev is not None:
+        #         if ev.is_departing(self.current_step) is not None:
+        #             # calculate battery degradation
+        #             # _,_ = ev.get_battery_degradation()
+        #             self.evs_connected[i] = None
+        #             ev_user_satisfaction = ev.get_user_satisfaction()
+        #             self.total_user_satisfaction += ev_user_satisfaction
+        #             user_satisfaction.append(ev_user_satisfaction)
+        #             self.all_user_satisfaction.append(ev_user_satisfaction)
                     
-                    departing_evs.append(ev)
-                    if self.verbose:
-                        print(f'- EV {ev.id} is departing from CS {self.id}' +
-                              f' port {i}'
-                              f' with user satisfaction {ev_user_satisfaction}' +
-                              f' (SoC: {ev.get_soc()*100: 6.1f}%)')
+        #             departing_evs.append(ev)
+        #             if self.verbose:
+        #                 print(f'- EV {ev.id} is departing from CS {self.id}' +
+        #                       f' port {i}'
+        #                       f' with user satisfaction {ev_user_satisfaction}' +
+        #                       f' (SoC: {ev.get_soc()*100: 6.1f}%)')
 
         self.current_step += 1
 
-        return profit, user_satisfaction, invalid_action_punishment, departing_evs, money_spent, money_earned
+        return money_spent_charging, money_earned_discharging, invalid_action_punishment
 
     def __str__(self) -> str:
 
