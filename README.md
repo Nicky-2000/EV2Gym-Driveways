@@ -1,4 +1,9 @@
 
+# Changes this Fork makes to EV2Gym.
+This fork changes the simulation behavior so a single EV is tied to a single charger.
+This behaviour is meant to emulate a house having a driveway with a charger for their EV.
+
+
 # EV2Gym: A Realistic EV-V2G-Gym Simulator for EV Smart Charging
 
 <div align="center">

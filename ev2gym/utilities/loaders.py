@@ -5,6 +5,7 @@ This file contains the loaders for the EV City environment.
 import numpy as np
 import pandas as pd
 import math
+import os
 import datetime
 import pkg_resources
 import json
@@ -29,7 +30,8 @@ def load_ev_spawn_scenarios(env) -> None:
             ev_specs_file = pkg_resources.resource_filename(
                 'ev2gym', 'data/ev_specs.json')
         
-        with open(ev_specs_file) as f:
+        file = resolve_path(env.config['ev_specs_file'])
+        with open(file) as f:
             env.ev_specs = json.load(f)
 
         registrations = np.zeros(len(env.ev_specs.keys()))
@@ -447,3 +449,66 @@ def load_electricity_prices(env) -> Tuple[np.ndarray, np.ndarray]:
 
     discharge_prices = discharge_prices * env.config['discharge_price_factor']
     return charge_prices, discharge_prices
+
+
+def load_weekly_EV_profiles(env) -> List[dict]:
+    vehicle_profiles_by_day_file = pkg_resources.resource_filename(
+        'ev2gym', 'data/vehicle_profiles_by_day.parquet')
+    
+    df = pd.read_parquet(vehicle_profiles_by_day_file)
+
+    
+    day_map = {1: "Monday", 2: "Tuesday", 3: "Wednesday", 4: "Thursday",
+               5: "Friday", 6: "Saturday", 7: "Sunday"}
+
+    days_of_week = {day: df[df['day'] == day].copy() for day in range(1, 8)}
+
+    weekly_profiles = []
+
+    for i in range(env.cs):  # One EV per charging station
+        ev_week = {}
+        for day in range(1, 8):
+            day_df = days_of_week[day]
+
+            # Randomly sample one profile for this day
+            if len(day_df) == 0:
+                raise ValueError(f"No trip data available for day {day_map[day]}")
+            
+            # Make sure that each EV has a different seed. But still remain deterministic and reproducible
+            seed = hash(f"{i}_{day}") % (2**32)
+            sampled_row = day_df.sample(n=1, random_state=seed).iloc[0]
+            count = 0
+            while len(sampled_row['trips']) == 0:
+                count += 1
+                if count > 10:
+                    print(f"Warning: No valid trip data found for EV {i} on {day_map[day]} after 10 attempts.")
+                    break
+                sampled_row = day_df.sample(n=1, random_state=seed + count).iloc[0]
+            
+            trips = []
+            for trip in sampled_row['trips']:
+                departure = int(trip[0])
+                arrival = int(trip[1])
+                miles = float(trip[2])
+                trips.append({
+                    'departure': departure,
+                    'arrival': arrival,
+                    'miles': miles
+                })
+            ev_week[day] = {'trips': trips}
+
+        weekly_profiles.append(ev_week)
+        
+    return weekly_profiles
+
+
+
+
+
+def resolve_path(relative_path: str) -> str:
+    """
+    Resolves a relative path with respect to the ev2gym root directory.
+    """
+    # Get the root directory: one level up from this utilities/ folder
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
+    return os.path.abspath(os.path.join(repo_root, relative_path))

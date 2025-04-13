@@ -13,7 +13,7 @@ class EV_Charger:
         - connected_bus: the bus to which the EV charger is connected
         - connected_transformer: the transformer(s) to which the EV charger is connected
         - geo_location: the geographical location of the EV charger                
-        - n_ports: the number of ports of the EV charger
+        - n_ports: the number of ports of the EV chargers
         - charger_type: the type of the EV charger (typ1, type2, or DC)
         - bi_directional: whether the EV charger can provide power to the grid or not
         - timescale: the timescale of the simulation (useful for determining the charging speed)
@@ -124,6 +124,8 @@ class EV_Charger:
             - user_satisfaction: a list of user satisfaction values for each EV connected to the EV charger in the current timestep
         '''
         profit = 0
+        money_spent = 0 # Keeps track of how much money was spent on charging
+        money_earned = 0 # Keeps track of how much money was earned from discharging
         user_satisfaction = []
         self.current_power_output = 0
         self.current_total_amps = 0
@@ -176,6 +178,7 @@ class EV_Charger:
                     type=self.charger_type)
 
                 profit += abs(actual_energy) * charge_price
+                money_spent += abs(actual_energy) * charge_price 
                 self.total_energy_charged += abs(actual_energy)
                 self.current_power_output += actual_energy * 60/self.timescale
                 self.current_total_amps += actual_amps
@@ -192,6 +195,7 @@ class EV_Charger:
                     type=self.charger_type)
 
                 profit += abs(actual_energy) * discharge_price
+                money_earned += abs(actual_energy) * discharge_price
                 self.total_energy_discharged += abs(actual_energy)
                 self.current_power_output += actual_energy * 60/self.timescale
                 self.current_total_amps += actual_amps
@@ -229,7 +233,7 @@ class EV_Charger:
 
         self.current_step += 1
 
-        return profit, user_satisfaction, invalid_action_punishment, departing_evs
+        return profit, user_satisfaction, invalid_action_punishment, departing_evs, money_spent, money_earned
 
     def __str__(self) -> str:
 
@@ -262,24 +266,24 @@ class EV_Charger:
         else:
             return self.total_user_satisfaction / self.total_evs_served
 
-    def spawn_ev(self, ev):
-        '''Adds an EV to the list of EVs connected to the EV charger
-        Inputs:
-            - ev: the EV to be added to the list of EVs connected to the EV charger
-        '''
-        assert (self.n_evs_connected < self.n_ports)
+    # def spawn_ev(self, ev):
+    #     '''Adds an EV to the list of EVs connected to the EV charger
+    #     Inputs:
+    #         - ev: the EV to be added to the list of EVs connected to the EV charger
+    #     '''
+    #     assert (self.n_evs_connected < self.n_ports)
 
-        index = self.evs_connected.index(None)
-        ev.id = index
-        self.evs_connected[index] = ev
-        self.n_evs_connected += 1
+    #     index = self.evs_connected.index(None)
+    #     ev.id = index
+    #     self.evs_connected[index] = ev
+    #     self.n_evs_connected += 1
         
-        #calculate ev max energy, if charging as fast as possible
-        ev.calculate_max_energy_with_AFAP(self.get_max_power())
+    #     #calculate ev max energy, if charging as fast as possible
+    #     ev.calculate_max_energy_with_AFAP(self.get_max_power())
 
-        if self.verbose:
-            print(f'+ EV connected to Charger {self.id} at port {index}' +
-                  f' leaving at {ev.time_of_departure}' +
-                  f' SoC {ev.get_soc()*100:.1f}%')
+    #     if self.verbose:
+    #         print(f'+ EV connected to Charger {self.id} at port {index}' +
+    #               f' leaving at {ev.time_of_departure}' +
+    #               f' SoC {ev.get_soc()*100:.1f}%')
 
-        return index
+    #     return index

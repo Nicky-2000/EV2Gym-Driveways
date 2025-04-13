@@ -18,9 +18,13 @@ import json
 # from .grid import Grid
 from ev2gym.models.replay import EvCityReplay
 from ev2gym.visuals.plots import ev_city_plot, visualize_step
-from ev2gym.utilities.utils import get_statistics, print_statistics, calculate_charge_power_potential
-from ev2gym.utilities.loaders import load_ev_spawn_scenarios, load_power_setpoints, load_transformers, load_ev_charger_profiles, load_ev_profiles, load_electricity_prices
+from ev2gym.utilities.utils import EV_spawner_for_driveways, get_statistics, print_statistics, calculate_charge_power_potential, spawn_single_EV
+from ev2gym.utilities.loaders import load_ev_spawn_scenarios, load_power_setpoints, load_transformers, load_ev_charger_profiles, load_ev_profiles, load_electricity_prices, load_weekly_EV_profiles
 from ev2gym.visuals.render import Renderer
+from ev2gym.models.Household import Household
+from ev2gym.models.ev_charger import EV_Charger
+from ev2gym.models.ev import EV
+
 
 from ev2gym.rl_agent.reward import SquaredTrackingErrorReward
 from ev2gym.rl_agent.state import PublicPST
@@ -213,6 +217,16 @@ class EV2Gym(gym.Env):
             load_ev_spawn_scenarios(self)
 
         # Spawn EVs
+        self.weekly_EV_profiles: list[dict] = load_weekly_EV_profiles(self)
+        self.EVs_for_driveways: list[EV] = EV_spawner_for_driveways(self)
+        
+        # Initialize Households
+        self.Households: list[Household] = []
+        for cs, ev, ev_profile in zip(self.charging_stations, self.EVs_for_driveways , self.weekly_EV_profiles):
+            household = Household(charging_station=cs, ev=ev, ev_weekly_profile=ev_profile, timescale=self.timescale)
+            self.Households.append(household)
+        
+
         self.EVs_profiles = load_ev_profiles(self)
         self.EVs = []
 
@@ -421,51 +435,49 @@ class EV2Gym(gym.Env):
             tr.reset(step=self.current_step)
 
         # Call step for each charging station and spawn EVs where necessary
-        for i, cs in enumerate(self.charging_stations):
-            n_ports = cs.n_ports
-            costs, user_satisfaction, invalid_action_punishment, ev = cs.step(
+        for i, household in enumerate(self.Households):
+            cs: EV_Charger = household.charging_station
+            n_ports = household.charging_station.n_ports
+            assert n_ports == 1, "Only one port is supported for now"
+            
+            invalid_action_punishment, ev = household.step(
                 actions[port_counter:port_counter + n_ports],
                 self.charge_prices[cs.id, self.current_step],
-                self.discharge_prices[cs.id, self.current_step])
-
-            self.departing_evs += ev
-
-            for u in user_satisfaction:
-                user_satisfaction_list.append(u)
+                self.discharge_prices[cs.id, self.current_step],
+                self.sim_date)
 
             self.current_power_usage[self.current_step] += cs.current_power_output
 
             # Update transformer variables for this timestep
             self.transformers[cs.connected_transformer].step(
                 cs.current_total_amps, cs.current_power_output)
-
-            total_costs += costs
+            
             total_invalid_action_punishment += invalid_action_punishment
-            self.current_ev_departed += len(user_satisfaction)
 
             port_counter += n_ports
 
-        # Spawn EVs
-        counter = self.total_evs_spawned
-        for i, ev in enumerate(self.EVs_profiles[counter:]):
-            if ev.time_of_arrival == self.current_step + 1:
-                ev = deepcopy(ev)
-                ev.reset()
-                ev.simulation_length = self.simulation_length
-                index = self.charging_stations[ev.location].spawn_ev(ev)
+        
+        # # Spawn EVs
+        # counter = self.total_evs_spawned
+        # for i, ev in enumerate(self.EVs_profiles[counter:]):
+        #     if ev.time_of_arrival == self.current_step + 1:
+        #         ev = deepcopy(ev)
+        #         ev.reset()
+        #         ev.simulation_length = self.simulation_length
+        #         index = self.charging_stations[ev.location].spawn_ev(ev)
 
-                if not self.lightweight_plots:
-                    self.port_arrival[f'{ev.location}.{index}'].append(
-                        (self.current_step+1, ev.time_of_departure+1))
+        #         if not self.lightweight_plots:
+        #             self.port_arrival[f'{ev.location}.{index}'].append(
+        #                 (self.current_step+1, ev.time_of_departure+1))
 
-                self.total_evs_spawned += 1
-                self.current_ev_arrived += 1
-                self.EVs.append(ev)
+        #         self.total_evs_spawned += 1
+        #         self.current_ev_arrived += 1
+        #         self.EVs.append(ev)
 
-            elif ev.time_of_arrival > self.current_step + 1:
-                break
+        #     elif ev.time_of_arrival > self.current_step + 1:
+        #         break
 
-        self._update_power_statistics(self.departing_evs)
+        self._update_power_statistics()
 
         self.current_step += 1
         self._step_date()
@@ -589,7 +601,7 @@ class EV2Gym(gym.Env):
 
         self.save_plots = save_plots
 
-    def _update_power_statistics(self, departing_evs):
+    def _update_power_statistics(self):
         '''Updates the power statistics of the simulation'''
 
         # if not self.lightweight_plots:
@@ -620,12 +632,12 @@ class EV2Gym(gym.Env):
                     self.port_energy_level[port, cs.id,
                                            self.current_step] = ev.current_capacity/ev.battery_capacity
 
-            for ev in self.departing_evs:
-                if not self.lightweight_plots:
-                    self.port_energy_level[ev.id, ev.location, self.current_step] = \
-                        ev.current_capacity/ev.battery_capacity
-                    self.port_current[ev.id, ev.location,
-                                      self.current_step] = ev.actual_current
+            # for ev in self.departing_evs:
+            #     if not self.lightweight_plots:
+            #         self.port_energy_level[ev.id, ev.location, self.current_step] = \
+            #             ev.current_capacity/ev.battery_capacity
+            #         self.port_current[ev.id, ev.location,
+            #                           self.current_step] = ev.actual_current
 
     def _step_date(self):
         '''Steps the simulation date by one timestep'''
